@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101522">
+<title>4D Number Lab</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#eaf0ff;background:#101522}
+*{box-sizing:border-box}
+body{margin:0;padding:24px;max-width:900px;margin-inline:auto}
+h1{margin:0 0 4px;font-size:clamp(1.8rem,5vw,2.5rem)}
+p{color:#b9c5db;line-height:1.55}
+.panel{background:#1b2435;border:1px solid #35415a;border-radius:16px;padding:20px;margin:18px 0}
+textarea,input,button{font:inherit;border-radius:9px;padding:12px}
+textarea,input{width:100%;background:#0f1726;color:white;border:1px solid #52627e}
+textarea{min-height:145px;resize:vertical}
+button{background:#80b3ff;border:0;color:#101522;font-weight:750;cursor:pointer;margin:8px 8px 0 0}
+button.secondary{background:#33445e;color:white}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #f7c873;outline-offset:2px}
+.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;margin-top:12px}
+.number{background:#0d1729;border:1px solid #4c648a;border-radius:10px;padding:14px;text-align:center;font-size:1.5rem;font-weight:800;letter-spacing:3px}
+.small{font-size:.9rem}
+label{display:block;margin:12px 0 5px;font-weight:650}
+.muted{font-size:.88rem;color:#9eacc5}
+.stat{padding:12px;border-radius:10px;background:#111c2e;margin-top:10px}
+footer{padding:10px 2px 28px;color:#9eacc5;font-size:.85rem}
+</style>
+</head>
+<body>
+<header>
+<h1>🎯 4D Number Lab</h1>
+<p>Explore historical four-digit results and generate random number ideas. This is an educational tool, not a reliable prediction system. In a fair draw, every four-digit number has the same chance.</p>
+</header>
+
+<section class="panel" aria-labelledby="history-title">
+<h2 id="history-title">1. Analyze historical results</h2>
+<p class="small">Paste one four-digit result per line. Commas, semicolons, or spaces are also accepted. Leading zeros are preserved.</p>
+<label for="history">Past results</label>
+<textarea id="history" placeholder="0123&#10;4408&#10;9001" spellcheck="false"></textarea>
+<button id="analyze">Analyze history</button>
+<button class="secondary" id="clear" type="button">Clear</button>
+<p id="status" role="status" aria-live="polite"></p>
+<div id="analysis"></div>
+</section>
+
+<section class="panel" aria-labelledby="generator-title">
+<h2 id="generator-title">2. Generate random 4D numbers</h2>
+<label for="count">How many numbers? (1–30)</label>
+<input id="count" type="number" min="1" max="30" value="10" inputmode="numeric">
+<button id="generate">Generate numbers</button>
+<div class="results" id="results" aria-live="polite"></div>
+<p class="muted">Numbers are sampled uniformly without duplicates within each batch. They are random ideas, not forecasts.</p>
+</section>
+
+<section class="panel">
+<h2>3. How to use the analysis</h2>
+<p>The digit counts summarize only the results you enter. Historical frequencies do not make a digit or combination more likely in a future independent draw. This page processes everything locally in your browser; it does not upload or save your entries.</p>
+</section>
+
+<footer>4D Number Lab · Standalone browser app · No account or server required</footer>
+
+<script>
+const byId = id => document.getElementById(id);
+
+function parseHistory(raw) {
+  const tokens = raw.trim() ? raw.trim().split(/[\s,;]+/) : [];
+  const valid = tokens.filter(token => /^\d{4}$/.test(token));
+  const invalid = tokens.filter(token => !/^\d{4}$/.test(token));
+  return { valid, invalid };
+}
+
+byId("analyze").addEventListener("click", () => {
+  const { valid, invalid } = parseHistory(byId("history").value);
+  const analysis = byId("analysis");
+  analysis.replaceChildren();
+
+  if (invalid.length) {
+    byId("status").textContent =
+      `${invalid.length} invalid entr${invalid.length === 1 ? "y" : "ies"}. Each result must contain exactly four digits.`;
+    return;
+  }
+  if (!valid.length) {
+    byId("status").textContent = "Enter at least one historical result.";
+    return;
+  }
+
+  byId("status").textContent = `Analyzed ${valid.length} historical result${valid.length === 1 ? "" : "s"}.`;
+  const frequencies = Array(10).fill(0);
+  for (const result of valid) {
+    for (const digit of result) frequencies[Number(digit)]++;
+  }
+
+  const freq = document.createElement("p");
+  freq.className = "stat";
+  freq.textContent = "Digit appearances (all positions combined): " +
+    frequencies.map((count, digit) => `${digit}: ${count}`).join(" · ");
+  analysis.append(freq);
+
+  const uniqueCount = new Set(valid).size;
+  const repeats = document.createElement("p");
+  repeats.className = "stat";
+  repeats.textContent = `Unique results: ${uniqueCount}. Repeated entries beyond the first: ${valid.length - uniqueCount}.`;
+  analysis.append(repeats);
+});
+
+byId("generate").addEventListener("click", () => {
+  const count = Number(byId("count").value);
+  const results = byId("results");
+  results.replaceChildren();
+
+  if (!Number.isInteger(count) || count < 1 || count > 30) {
+    results.textContent = "Choose a whole number from 1 to 30.";
+    return;
+  }
+
+  const chosen = new Set();
+  const range = 10000;
+  const limit = Math.floor(2 ** 32 / range) * range;
+  while (chosen.size < count) {
+    const random = new Uint32Array(1);
+    crypto.getRandomValues(random);
+    if (random[0] < limit) {
+      chosen.add(String(random[0] % range).padStart(4, "0"));
+    }
+  }
+
+  for (const value of chosen) {
+    const item = document.createElement("div");
+    item.className = "number";
+    item.textContent = value;
+    results.append(item);
+  }
+});
+
+byId("clear").addEventListener("click", () => {
+  byId("history").value = "";
+  byId("status").textContent = "";
+  byId("analysis").replaceChildren();
+});
+</script>
+</body>
+</html>
